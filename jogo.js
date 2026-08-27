@@ -27,11 +27,11 @@ const jogador = {
 let inimigos = [];
 let portas = [];
 
-// Gerenciamento de Teclas (Melhorado para aceitar maiúsculas e minúsculas)
+// Gerenciamento de Teclas
 const teclas = {};
 window.addEventListener("keydown", e => {
     teclas[e.key.toLowerCase()] = true;
-    teclas[e.key.toUpperCase()] = true; // Garante compatibilidade se o Caps Lock estiver ligado
+    teclas[e.key.toUpperCase()] = true; 
 });
 window.addEventListener("keyup", e => {
     teclas[e.key.toLowerCase()] = false;
@@ -84,15 +84,21 @@ function atualizar() {
     if (teclas["a"] || teclas["arrowleft"]) jogador.x = Math.max(jogador.raio, jogador.x - jogador.velocidade);
     if (teclas["d"] || teclas["arrowright"]) jogador.x = Math.min(canvas.width - jogador.raio, jogador.x + jogador.velocidade);
 
-    // TRAPAÇA CORRIGIDA: Pular de Nível ao apertar 'N' ou 'n'
+    // MUDANÇA: O comando 'N' agora exige que a sala esteja limpa (inimigos.length === 0)
     if (teclas["n"] || teclas["N"]) {
         teclas["n"] = false; 
-        teclas["N"] = false; // Desativa ambos para evitar repetição contínua
-        nivelAtual++;
-        salasLimpasNoNivel = 0;
-        alert(`⏩ COMANDO ATIVADO: Você pulou para o NÍVEL ${nivelAtual}!`);
-        carregarSala();
-        return; // Interrompe o frame atual para recarregar a sala com segurança
+        teclas["N"] = false; // Evita cliques múltiplos
+        
+        if (inimigos.length === 0) {
+            nivelAtual++;
+            salasLimpasNoNivel = 0;
+            alert(`🔹 PORTAS ABERTAS! Você avançou para o NÍVEL ${nivelAtual}! 🔹`);
+            carregarSala();
+            return;
+        } else {
+            // Feedback opcional no console ou tela caso tente pular com inimigos vivos
+            console.log("Comando bloqueado: derrote todos os inimigos primeiro!");
+        }
     }
 
     // 2. Sistema de Ataque
@@ -202,7 +208,7 @@ function desenhar() {
 
     ctx.beginPath();
     ctx.arc(jogador.x, jogador.y, jogador.raio, 0, Math.PI * 2);
-    ctx.fillStyle = jogador.cor;
+    ctx.fillStyle = parseInt(jogador.hp) <= 1 ? "#FF5555" : jogador.cor; // Pisca em vermelho se estiver morrendo
     ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#000";
@@ -228,7 +234,7 @@ function desenhar() {
         ctx.fillText(`Inimigos na sala: ${inimigos.length}`, canvas.width - 160, canvas.height - 20);
     } else {
         ctx.fillStyle = "#66FF66";
-        ctx.fillText("Sala Limpa! Prossiga para a próxima porta.", canvas.width - 290, canvas.height - 20);
+        ctx.fillText("Sala Limpa! Pressione [N] ou use as portas para avançar.", canvas.width - 390, canvas.height - 20);
     }
 }
 
