@@ -4,23 +4,27 @@ const ctx = canvas.getContext("2d");
 // Configurações do Jogo e Progressão
 let nivelAtual = 1;
 let salasLimpasNoNivel = 0;
-const SALAS_PARA_SUBIR_NIVEL = 3; // Quantas salas limpar para aumentar a dificuldade
+const SALAS_PARA_SUBIR_NIVEL = 3;
 
 let salaAtualX = 0;
 let salaAtualY = 0;
 
-// Objeto do Jogador
+// Contador global para controlar o ritmo das pernas e braços correndo (Animação)
+let frameAnimacao = 0;
+
+// Objeto do Jogador com propriedades de animação
 const jogador = {
     x: canvas.width / 2,
     y: canvas.height / 2,
-    raio: 15,
+    raio: 16,
     velocidade: 4.5,
     hp: 3,
     maxHp: 5,
-    cor: "#00FF00",
     ataqueAtivo: false,
     timerAtaque: 0,
-    raioAtaque: 35
+    raioAtaque: 40,
+    andando: false,
+    direcaoOlhar: 1 // 1 para direita, -1 para esquerda
 };
 
 // Lista de Inimigos e Portas
@@ -38,23 +42,19 @@ window.addEventListener("keyup", e => {
     teclas[e.key.toUpperCase()] = false;
 });
 
-// Inicializar ou mudar de sala (Gera dificuldade baseada no nivelAtual)
 function carregarSala() {
     inimigos = [];
-    
-    // PROGRESSÃO DE DIFICULDADE
     let qtdMinima = Math.min(2 + Math.floor(nivelAtual / 2), 6);
     let qtdMaxima = Math.min(3 + nivelAtual, 9);
     let qtdInimigos = Math.floor(Math.random() * (qtdMaxima - qtdMinima + 1)) + qtdMinima;
 
-    // Primeira sala do jogo é sempre mais fácil
     if (nivelAtual === 1 && salaAtualX === 0 && salaAtualY === 0) {
         qtdInimigos = 1; 
     }
 
     for(let i = 0; i < qtdInimigos; i++) {
         let modificadorVelocidade = 1 + (nivelAtual * 0.15); 
-        let velocidadeBase = Math.random() * 0.8 + 1.0;
+        let velocidadeBase = Math.random() * 0.8 + 0.8;
 
         let ehGrande = Math.random() < 0.15 && nivelAtual > 2;
         
@@ -62,9 +62,11 @@ function carregarSala() {
             x: Math.random() * (canvas.width - 120) + 60,
             y: Math.random() * (canvas.height - 120) + 60,
             velocidade: velocidadeBase * modificadorVelocidade * (ehGrande ? 0.8 : 1),
-            raio: ehGrande ? 20 : (Math.random() * 4 + 10),
-            cor: ehGrande ? "#8B0000" : "#FF0000",
-            dano: ehGrande ? 0.04 : 0.02
+            raio: ehGrande ? 24 : 14,
+            ehGrande: ehGrande,
+            dano: ehGrande ? 0.04 : 0.02,
+            timerAtaqueInimigo: 0, // Controla visual do ataque do monstro
+            direcaoOlhar: 1
         });
     }
 
@@ -78,33 +80,39 @@ function carregarSala() {
 
 // Lógica do Jogo (Atualização constante)
 function atualizar() {
-    // 1. Movimentação do jogador
-    if (teclas["w"] || teclas["arrowup"]) jogador.y = Math.max(jogador.raio, jogador.y - jogador.velocidade);
-    if (teclas["s"] || teclas["arrowdown"]) jogador.y = Math.min(canvas.height - jogador.raio, jogador.y + jogador.velocidade);
-    if (teclas["a"] || teclas["arrowleft"]) jogador.x = Math.max(jogador.raio, jogador.x - jogador.velocidade);
-    if (teclas["d"] || teclas["arrowright"]) jogador.x = Math.min(canvas.width - jogador.raio, jogador.x + jogador.velocidade);
+    frameAnimacao++; // Incrementa relógio de animação
 
-    // MUDANÇA: O comando 'N' agora exige que a sala esteja limpa (inimigos.length === 0)
+    // 1. Movimentação e detecção de estado de movimento
+    let moveuX = 0;
+    let moveuY = 0;
+
+    if (teclas["w"] || teclas["arrowup"]) moveuY = -jogador.velocidade;
+    if (teclas["s"] || teclas["arrowdown"]) moveuY = jogador.velocidade;
+    if (teclas["a"] || teclas["arrowleft"]) { moveuX = -jogador.velocidade; jogador.direcaoOlhar = -1; }
+    if (teclas["d"] || teclas["arrowright"]) { moveuX = jogador.velocidade; jogador.direcaoOlhar = 1; }
+
+    jogador.x = Math.max(jogador.raio, Math.min(canvas.width - jogador.raio, jogador.x + moveuX));
+    jogador.y = Math.max(jogador.raio, Math.min(canvas.height - jogador.raio, jogador.y + moveuY));
+    
+    // Define se o jogador está em movimento para animar as pernas
+    jogador.andando = (moveuX !== 0 || moveuY !== 0);
+
+    // Comando 'N' para pular de nível se a sala estiver limpa
     if (teclas["n"] || teclas["N"]) {
-        teclas["n"] = false; 
-        teclas["N"] = false; // Evita cliques múltiplos
-        
+        teclas["n"] = false; teclas["N"] = false;
         if (inimigos.length === 0) {
             nivelAtual++;
             salasLimpasNoNivel = 0;
             alert(`🔹 PORTAS ABERTAS! Você avançou para o NÍVEL ${nivelAtual}! 🔹`);
             carregarSala();
             return;
-        } else {
-            // Feedback opcional no console ou tela caso tente pular com inimigos vivos
-            console.log("Comando bloqueado: derrote todos os inimigos primeiro!");
         }
     }
 
-    // 2. Sistema de Ataque
+    // 2. Sistema de Ataque do Jogador
     if (teclas[" "] && !jogador.ataqueAtivo) {
         jogador.ataqueAtivo = true;
-        jogador.timerAtaque = 8;
+        jogador.timerAtaque = 12; 
     }
 
     if (jogador.ataqueAtivo) {
@@ -112,29 +120,37 @@ function atualizar() {
         if (jogador.timerAtaque <= 0) jogador.ataqueAtivo = false;
     }
 
-    // 3. Inteligência Artificial dos Inimigos
+    // 3. IA e Ataque dos Inimigos
     inimigos.forEach((inimigo, index) => {
         let dx = jogador.x - inimigo.x;
         let dy = jogador.y - inimigo.y;
         let distancia = Math.sqrt(dx * dx + dy * dy);
+
+        // Define para onde o inimigo está olhando
+        if (dx > 0) inimigo.direcaoOlhar = 1;
+        if (dx < 0) inimigo.direcaoOlhar = -1;
 
         if (distancia > 0) {
             inimigo.x += (dx / distancia) * inimigo.velocidade;
             inimigo.y += (dy / distancia) * inimigo.velocidade;
         }
 
+        // Se o inimigo encostar no jogador, ele entra em estado de ataque
         if (distancia < jogador.raio + inimigo.raio) {
             jogador.hp -= inimigo.dano;
+            inimigo.timerAtaqueInimigo = 10; // Ativa animação de garras do monstro
+
             if (jogador.hp <= 0) {
-                alert(`Game Over! Você chegou até o Nível ${nivelAtual}.\nSalas limpas no total: ${salasLimpasNoNivel + ((nivelAtual-1) * SALAS_PARA_SUBIR_NIVEL)}`);
-                nivelAtual = 1;
-                salasLimpasNoNivel = 0;
-                jogador.hp = 3;
-                salaAtualX = 0; salaAtualY = 0;
+                alert(`Game Over! Você chegou até o Nível ${nivelAtual}.`);
+                nivelAtual = 1; salasLimpasNoNivel = 0; jogador.hp = 3; salaAtualX = 0; salaAtualY = 0;
                 carregarSala();
             }
         }
 
+        // Reduz o timer de animação de ataque do monstro
+        if (inimigo.timerAtaqueInimigo > 0) inimigo.timerAtaqueInimigo--;
+
+        // Ataque do jogador atinge monstro
         if (jogador.ataqueAtivo) {
             let distAtaque = Math.sqrt((jogador.x - inimigo.x)**2 + (jogador.y - inimigo.y)**2);
             if (distAtaque < jogador.raioAtaque + inimigo.raio) {
@@ -146,23 +162,20 @@ function atualizar() {
         }
     });
 
-    // 4. Transição de Sala Regular pelas portas
+    // 4. Transição de Sala Regular
     if (inimigos.length === 0) {
         portas.forEach(porta => {
             if (jogador.x > porta.x && jogador.x < porta.x + porta.w &&
                 jogador.y > porta.y && jogador.y < porta.y + porta.h) {
                 
                 salasLimpasNoNivel++;
-                
                 if (salasLimpasNoNivel >= SALAS_PARA_SUBIR_NIVEL) {
                     nivelAtual++;
                     salasLimpasNoNivel = 0;
-                    alert(`🔹 VOCÊ DESCEU PARA O NÍVEL ${nivelAtual}! 🔹\nOs monstros ficaram mais perigosos...`);
+                    alert(`🔹 VOCÊ DESCEU PARA O NÍVEL ${nivelAtual}! 🔹`);
                 }
 
-                salaAtualX += porta.dx;
-                salaAtualY += porta.dy;
-
+                salaAtualX += porta.dx; salaAtualY += porta.dy;
                 if (porta.dx === 1) jogador.x = 40;
                 if (porta.dx === -1) jogador.x = canvas.width - 40;
                 if (porta.dy === 1) jogador.y = 40;
@@ -174,75 +187,108 @@ function atualizar() {
     }
 }
 
-// Renderização Visual
-function desenhar() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+// ARTE PROCEDURAL: Desenha o Sprite do Cavaleiro (Jogador)
+function desenharJogador(x, y, jogadorObj) {
+    ctx.save();
+    ctx.translate(x, y);
 
-    let tomVermelho = Math.min(nivelAtual * 12, 80);
-    ctx.fillStyle = `rgb(${15 + tomVermelho}, 15, 20)`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let balancoY = jogadorObj.andando ? Math.sin(frameAnimacao * 0.4) * 2 : 0;
+    let movimentoPerna = jogadorObj.andando ? Math.sin(frameAnimacao * 0.4) * 6 : 0;
 
-    portas.forEach(porta => {
-        ctx.fillStyle = (inimigos.length === 0) ? "#FFD700" : "#441111";
-        ctx.fillRect(porta.x, porta.y, porta.w, porta.h);
-    });
+    // 1. Pernas/Botas
+    ctx.fillStyle = "#333";
+    ctx.fillRect(-8, 8 + (movimentoPerna > 0 ? -2 : 2), 5, 8); 
+    ctx.fillRect(3, 8 + (movimentoPerna > 0 ? 2 : -2), 5, 8);  
 
-    inimigos.forEach(inimigo => {
-        ctx.beginPath();
-        ctx.arc(inimigo.x, inimigo.y, inimigo.raio, 0, Math.PI * 2);
-        ctx.fillStyle = inimigo.cor;
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#FFF";
-        ctx.stroke();
-        ctx.closePath();
-    });
-
-    if (jogador.ataqueAtivo) {
-        ctx.beginPath();
-        ctx.arc(jogador.x, jogador.y, jogador.raioAtaque, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(0, 255, 255, 0.35)";
-        ctx.fill();
-        ctx.closePath();
-    }
-
-    ctx.beginPath();
-    ctx.arc(jogador.x, jogador.y, jogador.raio, 0, Math.PI * 2);
-    ctx.fillStyle = parseInt(jogador.hp) <= 1 ? "#FF5555" : jogador.cor; // Pisca em vermelho se estiver morrendo
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#000";
-    ctx.stroke();
-    ctx.closePath();
-
-    ctx.fillStyle = "white";
-    ctx.font = "bold 16px sans-serif";
-    
-    let coracoes = "❤️".repeat(Math.floor(jogador.hp)) + (jogador.hp % 1 >= 0.5 ? "💔" : "");
-    ctx.fillText(`Vida: ${coracoes || "💀"}`, 20, 30);
-    
-    ctx.fillStyle = "#FFD700";
-    ctx.fillText(`ANDAR: ${nivelAtual}`, canvas.width / 2 - 40, 30);
-    
-    ctx.fillStyle = "#FFF";
-    ctx.font = "14px sans-serif";
-    ctx.fillText(`Progresso do Andar: ${salasLimpasNoNivel}/${SALAS_PARA_SUBIR_NIVEL}`, 20, canvas.height - 20);
-    ctx.fillText(`Sala: [${salaAtualX}, ${salaAtualY}]`, canvas.width - 110, 30);
-
-    if(inimigos.length > 0) {
-        ctx.fillStyle = "#FF6666";
-        ctx.fillText(`Inimigos na sala: ${inimigos.length}`, canvas.width - 160, canvas.height - 20);
+    // 2. Capa do Cavaleiro
+    ctx.fillStyle = "#A30000"; 
+    if (jogadorObj.direcaoOlhar === 1) {
+        ctx.fillRect(-15, -6 + balancoY, 8, 16);
     } else {
-        ctx.fillStyle = "#66FF66";
-        ctx.fillText("Sala Limpa! Pressione [N] ou use as portas para avançar.", canvas.width - 390, canvas.height - 20);
+        ctx.fillRect(7, -6 + balancoY, 8, 16);
     }
+
+    // 3. Corpo/Armadura
+    ctx.fillStyle = "#708090"; 
+    ctx.fillRect(-10, -8 + balancoY, 20, 18); 
+    ctx.fillStyle = "#4682B4"; 
+    ctx.fillRect(-6, -4 + balancoY, 12, 10);
+
+    // 4. Capacete Metálico
+    ctx.fillStyle = "#A9A9A9";
+    ctx.fillRect(-8, -20 + balancoY, 16, 13);
+    ctx.fillStyle = "#111";
+    if (jogadorObj.direcaoOlhar === 1) {
+        ctx.fillRect(-2, -16 + balancoY, 10, 3);
+    } else {
+        ctx.fillRect(-8, -16 + balancoY, 10, 3);
+    }
+
+    // 5. ANIMAÇÃO DE ATAQUE
+    if (jogadorObj.ataqueAtivo) {
+        ctx.strokeStyle = "#00FFFF"; 
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        if (jogadorObj.direcaoOlhar === 1) {
+            ctx.arc(10, 0, 22, -Math.PI/3, Math.PI/3);
+        } else {
+            ctx.arc(-10, 0, 22, Math.PI - Math.PI/3, Math.PI + Math.PI/3);
+        }
+        ctx.stroke();
+    } else {
+        ctx.fillStyle = "#C0C0C0";
+        if (jogadorObj.direcaoOlhar === 1) {
+            ctx.fillRect(10, -6 + balancoY, 3, 12); 
+        } else {
+            ctx.fillRect(-13, -6 + balancoY, 3, 12); 
+        }
+    }
+
+    ctx.restore();
 }
 
-function loop() {
-    atualizar();
-    desenhar();
-    requestAnimationFrame(loop);
+// ARTE PROCEDURAL: Desenha o Sprite do Monstro/Inimigo
+function desenharInimigo(inimigoObj) {
+    ctx.save();
+    ctx.translate(inimigoObj.x, inimigoObj.y);
+
+    let balancoMonstro = Math.sin(frameAnimacao * 0.2 + inimigoObj.x) * 3;
+    let corPrincipal = inimigoObj.ehGrande ? "#4A0000" : "#2E8B57"; 
+
+    // 1. Corpo Monstruoso
+    ctx.fillStyle = corPrincipal;
+    ctx.fillRect(-inimigoObj.raio, -inimigoObj.raio + balancoMonstro, inimigoObj.raio * 2, inimigoObj.raio * 2);
+
+    // 2. Olhos Famintos
+    ctx.fillStyle = "#FFD700";
+    if (inimigoObj.direcaoOlhar === 1) {
+        ctx.fillRect(2, -8 + balancoMonstro, 4, 4);
+        ctx.fillRect(10, -8 + balancoMonstro, 4, 4);
+    } else {
+        ctx.fillRect(-14, -8 + balancoMonstro, 4, 4);
+        ctx.fillRect(-6, -8 + balancoMonstro, 4, 4);
+    }
+
+    // 3. ANIMAÇÃO DE ATAQUE DO INIMIGO
+    if (inimigoObj.timerAtaqueInimigo > 0) {
+        ctx.fillStyle = "#FF0000"; 
+        if (inimigoObj.direcaoOlhar === 1) {
+            ctx.fillRect(inimigoObj.raio, -2 + balancoMonstro, 12, 4); 
+        } else {
+            ctx.fillRect(-inimigoObj.raio - 12, -2 + balancoMonstro, 12, 4);
+        }
+    } else {
+        ctx.fillStyle = corPrincipal;
+        let balancoBraco = Math.cos(frameAnimacao * 0.3) * 4;
+        if (inimigoObj.direcaoOlhar === 1) {
+            ctx.fillRect(inimigoObj.raio - 2, balancoBraco, 6, 8);
+        } else {
+            ctx.fillRect(-inimigoObj.raio - 4, balancoBraco, 6, 8);
+        }
+    }
+
+    ctx.restore();
 }
 
-carregarSala();
-loop();
+// Renderização Geral
+function desenhar() {ctx.clearRect(0, 0, canvas.width, canvas.height);let tomVermelho = Math.min(nivelAtual * 12, 80);ctx.fillStyle = rgb(${15 + tomVermelho}, 15, 20);ctx.fillRect(0, 0, canvas.width, canvas.height);// Portasportas.forEach(porta => {ctx.fillStyle = (inimigos.length === 0) ? "#FFD700" : "#441111";ctx.fillRect(porta.x, porta.y, porta.w, porta.h);});// Desenha todos os Inimigos usando a nova função de Spriteinimigos.forEach(inimigo => {desenharInimigo(inimigo);});// Desenha o alcance de ataque sutil em voltaif (jogador.ataqueAtivo) {ctx.beginPath();ctx.arc(jogador.x, jogador.y, jogador.raioAtaque, 0, Math.PI * 2);ctx.fillStyle = "rgba(0, 255, 255, 0.15)";ctx.fill();ctx.closePath();}// Desenha o Jogador usando a nova função de SpritedesenharJogador(jogador.x, jogador.y, jogador);// Interface HUDctx.fillStyle = "white";ctx.font = "bold 16px sans-serif";let coracoes = "❤️".repeat(Math.floor(jogador.hp)) + (jogador.hp % 1 >= 0.5 ? "💔" : "");ctx.fillText(Vida: ${coracoes || "💀"}, 20, 30);ctx.fillStyle = "#FFD700";ctx.fillText(ANDAR: ${nivelAtual}, canvas.width / 2 - 40, 30);ctx.fillStyle = "#FFF";ctx.font = "14px sans-serif";ctx.fillText(Progresso do Andar: ${salasLimpasNoNivel}/${SALAS_PARA_SUBIR_NIVEL}, 20, canvas.height - 20);ctx.fillText(Sala: [${salaAtualX}, ${salaAtualY}], canvas.width - 110, 30);if(inimigos.length > 0) {ctx.fillStyle = "#FF6666";ctx.fillText(Inimigos na sala: ${inimigos.length}, canvas.width - 160, canvas.height - 20);} else {ctx.fillStyle = "#66FF66";ctx.fillText("Sala Limpa! Pressione [N] ou use as portas para avançar.", canvas.width - 390, canvas.height - 20);}}function loop() {atualizar();desenhar();requestAnimationFrame(loop);}carregarSala();loop();
