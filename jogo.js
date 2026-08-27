@@ -3,7 +3,7 @@ const ctx = canvas.getContext("2d");
 
 // Configurações do Jogo e Progressão
 let nivelAtual = 1;
-let salasLimpas NoNivel = 0;
+let salasLimpasNoNivel = 0;
 const SALAS_PARA_SUBIR_NIVEL = 3; // Quantas salas limpar para aumentar a dificuldade
 
 let salaAtualX = 0;
@@ -83,6 +83,15 @@ function atualizar() {
     if (teclas["a"] || teclas["arrowleft"]) jogador.x = Math.max(jogador.raio, jogador.x - jogador.velocidade);
     if (teclas["d"] || teclas["arrowright"]) jogador.x = Math.min(canvas.width - jogador.raio, jogador.x + jogador.velocidade);
 
+    // TRAPAÇA / COMANDO DE TESTE: Pular de Nível ao apertar 'N'
+    if (teclas["n"]) {
+        teclas["n"] = false; // Reseta o estado para não pular vários níveis em sequência imediata
+        nivelAtual++;
+        salasLimpasNoNivel = 0;
+        alert(`⏩ COMANDO ATIVADO: Você pulou para o NÍVEL ${nivelAtual}!`);
+        carregarSala();
+    }
+
     // 2. Sistema de Ataque
     if (teclas[" "] && !jogador.ataqueAtivo) {
         jogador.ataqueAtivo = true;
@@ -133,7 +142,7 @@ function atualizar() {
         }
     });
 
-    // 4. Transição de Sala e Subida de Nível
+    // 4. Transição de Sala e Subida de Nível Regular
     if (inimigos.length === 0) {
         portas.forEach(porta => {
             if (jogador.x > porta.x && jogador.x < porta.x + porta.w &&
